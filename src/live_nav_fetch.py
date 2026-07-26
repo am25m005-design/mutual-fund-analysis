@@ -34,7 +34,7 @@ def fetch_nav():
 def save_nav_history(data):
     """Save NAV history as CSV"""
 
-    output_dir = Path("data") / "processed"
+    output_dir = Path("data") / "raw"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     nav_df = pd.DataFrame(data["data"])
