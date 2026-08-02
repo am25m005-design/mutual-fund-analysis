@@ -1,74 +1,136 @@
 from pathlib import Path
+import sqlite3
 
 import pandas as pd
 from sqlalchemy import create_engine
 
+# ==========================================================
+# PROJECT PATHS
+# ==========================================================
 
-DATABASE = "sqlite:///bluestock_mf.db"
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+DATABASE = BASE_DIR / "database" / "bluestock_mf.db"
+
+SCHEMA = BASE_DIR / "sql" / "schema.sql"
+
+PROCESSED = BASE_DIR / "data" / "processed"
+
+# ==========================================================
+# DATABASE
+# ==========================================================
+
+DATABASE.parent.mkdir(exist_ok=True)
+
+engine = create_engine(f"sqlite:///{DATABASE}")
+
+# ==========================================================
+# CREATE DATABASE
+# ==========================================================
+
+print("=" * 70)
+print("CREATING SQLITE DATABASE")
+print("=" * 70)
+
+with sqlite3.connect(DATABASE) as conn:
+
+    with open(SCHEMA, "r", encoding="utf-8") as f:
+
+        conn.executescript(f.read())
+
+print("Schema Created Successfully.\n")
+
+# ==========================================================
+# FILES
+# ==========================================================
 
 FILES = {
-    "dim_fund": "data/raw/01_fund_master.csv",
-    "fact_nav": "data/processed/clean_nav.csv",
-    "fact_transactions": "data/processed/clean_transactions.csv",
-    "fact_performance": "data/processed/clean_performance.csv",
+
+    "fund_master":
+        PROCESSED / "clean_fund_master.csv",
+
+    "nav_history":
+        PROCESSED / "clean_nav.csv",
+
+    "investor_transactions":
+        PROCESSED / "clean_transactions.csv",
+
+    "scheme_performance":
+        PROCESSED / "clean_performance.csv",
+
+    "aum_history":
+        PROCESSED / "clean_aum.csv"
+
 }
 
+# ==========================================================
+# LOAD TABLE
+# ==========================================================
 
-def load_csv(file_path):
-    return pd.read_csv(file_path)
 
+def load_table(table_name, csv_path):
 
-def load_table(df, table_name, engine):
+    if not csv_path.exists():
+
+        print(f"{csv_path.name} NOT FOUND")
+
+        return
+
+    df = pd.read_csv(csv_path)
+
     df.to_sql(
+
         table_name,
+
         engine,
-        if_exists="replace",
+
+        if_exists="append",
+
         index=False
+
     )
 
-
-def verify_table(table_name, engine):
-    query = f"SELECT COUNT(*) AS rows FROM {table_name}"
-    rows = pd.read_sql(query, engine)
-
-    print(f"{table_name:<20} {rows.iloc[0, 0]} rows")
+    print(f"{table_name:<25} {len(df):>8} rows loaded")
 
 
-def main():
+# ==========================================================
+# LOAD ALL TABLES
+# ==========================================================
 
-    print("=" * 70)
-    print("LOADING DATA INTO SQLITE DATABASE")
-    print("=" * 70)
+print("=" * 70)
+print("LOADING TABLES")
+print("=" * 70)
 
-    engine = create_engine(DATABASE)
+for table, file in FILES.items():
 
-    for table_name, file_path in FILES.items():
+    load_table(table, file)
 
-        path = Path(file_path)
+print()
 
-        if not path.exists():
-            print(f"File not found : {path}")
-            continue
+# ==========================================================
+# VERIFY
+# ==========================================================
 
-        print(f"\nLoading {path.name} ...")
+print("=" * 70)
+print("VERIFY TABLES")
+print("=" * 70)
 
-        df = load_csv(path)
+with sqlite3.connect(DATABASE) as conn:
 
-        load_table(df, table_name, engine)
+    cursor = conn.cursor()
 
-        print(f"{len(df)} records inserted.")
+    for table in FILES.keys():
 
-    print("\n" + "=" * 70)
-    print("DATABASE VERIFICATION")
-    print("=" * 70)
+        cursor.execute(f"SELECT COUNT(*) FROM {table}")
 
-    for table_name in FILES.keys():
-        verify_table(table_name, engine)
+        rows = cursor.fetchone()[0]
 
-    print("\nDatabase created successfully.")
-    print("Database File : bluestock_mf.db")
+        print(f"{table:<25} {rows}")
 
+print()
 
-if __name__ == "__main__":
-    main()
-    
+print("=" * 70)
+print("DATABASE CREATED SUCCESSFULLY")
+print("=" * 70)
+
+print(f"\nDatabase Location:\n{DATABASE}")
